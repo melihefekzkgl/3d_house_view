@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Architectural Visualization</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-glass: rgba(16, 18, 23, 0.78);
+            --bg-glass-strong: rgba(14, 16, 21, 0.92);
+            --border-subtle: rgba(255, 255, 255, 0.09);
+            --accent: #10b981;
+            --accent-soft: rgba(16, 185, 129, 0.14);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+        * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+        body, html {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            overflow: hidden; background-color: #0f1115;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: var(--text-main);
+        }
+        #canvas-container { width: 100%; height: 100%; position: relative; touch-action: none; }
+
+        #left-sidebar {
+            position: fixed; top: 24px; left: 24px; width: 260px;
+            background: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle); border-radius: 18px;
+            padding: 20px; z-index: 20;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        }
+        #left-sidebar.hidden { transform: translateX(-310px); opacity: 0; pointer-events: none; }
+        .sidebar-header {
+            border-bottom: 1px solid var(--border-subtle);
+            padding-bottom: 14px; margin-bottom: 14px;
+        }
+        .sidebar-title { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; margin: 0 0 6px 0; }
+        .sidebar-subtitle { font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+        .sidebar-subtitle b { color: var(--text-main); font-weight: 600; }
+        #room-list { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow-y: auto; }
+        .room-btn {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid transparent;
+            border-radius: 11px; padding: 10px 12px; color: #cbd5e1; font-size: 13px;
+            font-weight: 500; cursor: pointer; display: flex; align-items: center;
+            justify-content: space-between; transition: all 0.2s ease; text-align: left;
+            font-family: inherit;
+        }
+        .room-btn:hover { background: rgba(255, 255, 255, 0.07); color: #fff; }
+        .room-btn.active {
+            background: var(--accent-soft); border-color: rgba(16, 185, 129, 0.4); color: #fff;
+        }
+        .room-btn-badge {
+            font-size: 11px; color: var(--accent); font-weight: 600;
+            background: rgba(16, 185, 129, 0.12); padding: 3px 8px; border-radius: 6px;
+        }
+
+        #settings-btn {
+            position: fixed; top: 24px; right: 24px;
+            width: 44px; height: 44px; border-radius: 50%;
+            background: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle); color: var(--text-main);
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 45;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+            transition: transform 0.25s ease, border-color 0.2s ease, background 0.2s ease;
+        }
+        #settings-btn:hover, #settings-btn.active {
+            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(30, 34, 43, 0.9);
+            transform: rotate(35deg);
+        }
+        #settings-btn svg { width: 20px; height: 20px; fill: currentColor; }
+
+        #settings-drawer {
+            position: fixed; top: 78px; right: 24px; width: 300px;
+            max-height: calc(100vh - 110px); overflow-y: auto;
+            background: var(--bg-glass-strong); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--border-subtle); border-radius: 18px;
+            padding: 18px; z-index: 45;
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+            opacity: 0; transform: translateY(-10px) scale(0.98); pointer-events: none;
+            transition: opacity 0.22s ease, transform 0.22s ease;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        #settings-drawer.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+        .st-section { display: flex; flex-direction: column; gap: 10px; }
+        .st-section + .st-section { border-top: 1px solid var(--border-subtle); padding-top: 14px; }
+        .st-title {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.7px; color: var(--text-muted); margin: 0;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .lang-switch {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+            background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 10px;
+            border: 1px solid var(--border-subtle);
+        }
+        .lang-btn {
+            background: transparent; border: none; color: var(--text-muted);
+            padding: 6px 10px; border-radius: 7px; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: all 0.2s; font-family: inherit;
+        }
+        .lang-btn.active {
+            background: var(--accent); color: #06281e;
+        }
+        .st-row { display: flex; flex-direction: column; gap: 5px; }
+        .st-label { display: flex; justify-content: space-between; font-size: 12px; color: #e2e8f0; }
+        .st-val { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 600; font-size: 12px; }
+        input[type="range"] {
+            -webkit-appearance: none; appearance: none; width: 100%; height: 5px;
+            background: rgba(255, 255, 255, 0.12); border-radius: 99px; outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none; width: 15px; height: 15px;
+            border-radius: 50%; background: #fff; cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+        .st-toggle { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #e2e8f0; cursor: pointer; }
+        .st-toggle input[type="checkbox"] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+        .st-info-box {
+            background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle);
+            border-radius: 10px; padding: 10px 12px; font-size: 11px; color: var(--text-muted);
+            line-height: 1.5; display: flex; flex-direction: column; gap: 8px;
+        }
+        .st-btn {
+            width: 100%; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--border-subtle);
+            color: #e2e8f0; padding: 8px 12px; border-radius: 9px; font-size: 12px;
+            font-weight: 500; cursor: pointer; transition: background 0.2s; font-family: inherit;
+        }
+        .st-btn:hover { background: rgba(255, 255, 255, 0.12); }
+        .st-btn-accent {
+            background: rgba(56, 189, 248, 0.15); border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;
+            display: none;
+        }
+        .st-btn-accent.visible { display: block; }
+
+        #material-panel {
+            position: fixed; bottom: 28px; right: 24px;
+            background: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle); border-radius: 18px;
+            padding: 14px 18px; z-index: 20;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+            display: none; flex-direction: column; gap: 10px;
+        }
+        #material-panel.active { display: flex; }
+        .mat-panel-title { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        #mat-swatches { display: flex; gap: 12px; }
+        .mat-swatch {
+            display: flex; flex-direction: column; align-items: center; gap: 6px;
+            cursor: pointer; background: none; border: none; color: #cbd5e1; font-size: 11px; padding: 0; font-family: inherit;
+        }
+        .mat-circle {
+            width: 36px; height: 36px; border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            background-size: cover; background-position: center;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+        .mat-swatch:hover .mat-circle { transform: scale(1.1); border-color: var(--accent); }
+
+        .callout-wrapper { position: relative; pointer-events: none; transform: translate(0px, -50%); }
+        .callout-container {
+            display: flex; align-items: flex-end; transform: translate(0, -50%);
+            opacity: 0; transition: opacity 0.25s ease;
+        }
+        .callout-container.visible { opacity: 1; }
+        .callout-svg { width: 64px; height: 84px; overflow: visible; flex-shrink: 0; }
+        .callout-card {
+            background: var(--bg-glass-strong); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 16px;
+            padding: 16px; min-width: 235px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); pointer-events: auto;
+            margin-bottom: 42px; margin-left: -4px;
+        }
+        .callout-header {
+            display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid var(--border-subtle); padding-bottom: 8px; margin-bottom: 10px;
+        }
+        .callout-title { font-size: 14px; font-weight: 600; color: #fff; margin: 0; }
+        .callout-close { background: none; border: none; color: var(--text-muted); font-size: 15px; cursor: pointer; padding: 0 2px; }
+        .callout-close:hover { color: #fff; }
+        .callout-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .callout-stat { background: rgba(255, 255, 255, 0.04); padding: 7px 10px; border-radius: 9px; }
+        .callout-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; display: block; margin-bottom: 2px; }
+        .callout-stat-val { font-size: 13px; font-weight: 600; color: #f1f5f9; }
+        .callout-note { font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.45; }
+        .callout-fps-btn {
+            width: 100%; background: var(--accent); border: none; color: #06281e;
+            padding: 8px 12px; border-radius: 9px; font-size: 12px; font-weight: 600;
+            cursor: pointer; transition: filter 0.2s; font-family: inherit;
+        }
+        .callout-fps-btn:hover { filter: brightness(1.1); }
+
+        #bottom-dock {
+            position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+            background: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 8px 20px 8px 10px; border-radius: 99px; border: 1px solid var(--border-subtle);
+            display: flex; align-items: center; gap: 12px; z-index: 20;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+        }
+        #bottom-dock.hidden { transform: translateX(-50%) translateY(110px); opacity: 0; pointer-events: none; }
+        .dock-text { color: var(--text-main); font-size: 13px; font-weight: 600; display: block; }
+        .dock-subtext { color: var(--text-muted); font-size: 11px; display: block; }
+        #pegman-btn {
+            width: 44px; height: 44px; border-radius: 50%;
+            background: linear-gradient(135deg, #10b981, #059669);
+            display: flex; align-items: center; justify-content: center;
+            cursor: grab; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35); touch-action: none;
+            transition: transform 0.2s ease;
+        }
+        #pegman-btn:hover { transform: scale(1.06); }
+        #pegman-btn svg { width: 22px; height: 22px; fill: #fff; pointer-events: none; }
+
+        #drag-ghost {
+            position: fixed; top: 0; left: 0; width: 52px; height: 52px;
+            margin-left: -26px; margin-top: -46px; pointer-events: none;
+            z-index: 100; display: none; filter: drop-shadow(0 12px 10px rgba(0,0,0,0.55));
+        }
+        #drag-ghost svg { width: 100%; height: 100%; fill: #f59e0b; stroke: #fff; stroke-width: 1.5px; }
+        #drag-ghost.valid svg { fill: var(--accent); }
+
+        #fps-header {
+            position: fixed; top: 24px; left: 50%; transform: translateX(-50%) translateY(-100px);
+            display: flex; align-items: center; gap: 14px;
+            background: var(--bg-glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 6px 8px 6px 18px; border-radius: 99px;
+            border: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 12px;
+            z-index: 30; opacity: 0; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); white-space: nowrap;
+        }
+        #fps-header.active { transform: translateX(-50%) translateY(0); opacity: 1; }
+        #fps-header b { color: var(--text-main); font-weight: 600; }
+        #exit-fps-btn {
+            width: 32px; height: 32px; border-radius: 50%; border: none;
+            background: rgba(239, 68, 68, 0.9); color: white; font-size: 14px; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background 0.2s, transform 0.2s;
+        }
+        #exit-fps-btn:hover { background: #ef4444; transform: scale(1.06); }
+
+        #joystick-zone {
+            position: fixed; bottom: 36px; left: 36px; width: 116px; height: 116px;
+            border-radius: 50%; background: rgba(255, 255, 255, 0.06);
+            border: 1.5px solid rgba(255, 255, 255, 0.16); z-index: 30; display: none; touch-action: none;
+        }
+        #joystick-knob {
+            position: absolute; top: 50%; left: 50%; width: 44px; height: 44px;
+            margin-left: -22px; margin-top: -22px; border-radius: 50%;
+            background: rgba(255, 255, 255, 0.85); pointer-events: none;
+        }
+
+        @media (max-width: 640px) {
+            #left-sidebar { width: 220px; padding: 14px; top: 16px; left: 16px; }
+            #settings-btn { top: 16px; right: 16px; }
+            #settings-drawer { right: 16px; top: 68px; width: calc(100vw - 32px); }
+        }
+    </style>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+                "gsap": "https://unpkg.com/gsap@3.12.5/index.js"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <aside id="left-sidebar">
+        <div class="sidebar-header">
+            <h1 class="sidebar-title" id="project-title">Residential Design</h1>
+            <div class="sidebar-subtitle">
+                <span id="ui-total-label">Total Net Area</span>
+                <b id="total-area-text">52.2 m²</b>
+            </div>
+        </div>
+        <div id="room-list"></div>
+    </aside>
+
+    <button id="settings-btn" title="Settings">
+        <svg viewBox="0 0 24 24">
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+        </svg>
+    </button>
+
+    <div id="settings-drawer">
+        <div class="st-section">
+            <h3 class="st-title"><span id="ui-st-lang">Language</span></h3>
+            <div class="lang-switch">
+                <button class="lang-btn active" data-lang="en">English (EN)</button>
+                <button class="lang-btn" data-lang="tr">Türkçe (TR)</button>
+            </div>
+        </div>
+
+        <div class="st-section">
+            <h3 class="st-title"><span id="ui-st-cam">Camera & Navigation</span></h3>
+            <div class="st-row">
+                <div class="st-label"><span id="ui-lbl-height">Eye Height (Z)</span><span class="st-val" id="height-val">2.80</span></div>
+                <input type="range" id="height-slider" min="0.30" max="4.50" step="0.05" value="2.80">
+            </div>
+            <div class="st-row">
+                <div class="st-label"><span id="ui-lbl-fov">Indoor FOV</span><span class="st-val" id="fov-val">70°</span></div>
+                <input type="range" id="fov-slider" min="45" max="110" step="1" value="70">
+            </div>
+        </div>
+
+        <div class="st-section">
+            <h3 class="st-title"><span id="ui-st-light">Lighting</span></h3>
+            <div class="st-row">
+                <div class="st-label"><span id="ui-lbl-exp">Exposure</span><span class="st-val" id="val-exposure">0.75</span></div>
+                <input type="range" id="sl-exposure" min="0.1" max="2.0" step="0.05" value="0.75">
+            </div>
+            <div class="st-row">
+                <div class="st-label"><span id="ui-lbl-hdr">HDR Reflection</span><span class="st-val" id="val-hdr">0.45</span></div>
+                <input type="range" id="sl-hdr" min="0.0" max="2.0" step="0.05" value="0.45">
+            </div>
+            <div class="st-row">
+                <div class="st-label"><span id="ui-lbl-sun">Sun Intensity</span><span class="st-val" id="val-sun">0.90</span></div>
+                <input type="range" id="sl-sun" min="0.0" max="3.0" step="0.05" value="0.90">
+            </div>
+            <div class="st-row">
+                <div class="st-label"><span id="ui-lbl-amb">Ambient Light</span><span class="st-val" id="val-ambient">0.35</span></div>
+                <input type="range" id="sl-ambient" min="0.0" max="2.0" step="0.05" value="0.35">
+            </div>
+        </div>
+
+        <div class="st-section">
+            <h3 class="st-title">
+                <span id="ui-st-perf">Performance & Scene</span>
+                <span class="st-val" id="fps-badge">-- FPS</span>
+            </h3>
+            <label class="st-toggle">
+                <span id="ui-lbl-shadows">Shadows Active</span>
+                <input type="checkbox" id="cb-shadows" checked>
+            </label>
+            <label class="st-toggle">
+                <span id="ui-lbl-turbo">Turbo Performance Mode</span>
+                <input type="checkbox" id="cb-turbo">
+            </label>
+            <div class="st-info-box">
+                <span id="debug-toast">Loading scene...</span>
+                <button class="st-btn st-btn-accent" id="flip-door-btn">🔄 Flip Last Door Direction</button>
+            </div>
+            <button class="st-btn" id="reset-light-btn">Reset to Defaults</button>
+        </div>
+    </div>
+
+    <div id="material-panel">
+        <span class="mat-panel-title" id="mat-panel-label">Floor Material</span>
+        <div id="mat-swatches"></div>
+    </div>
+
+    <div id="bottom-dock">
+        <div id="pegman-btn" title="Drag and drop into a room">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm9 7h-6v13h-2v-6h-2v6H9V9H3V7h18v2z"/>
+            </svg>
+        </div>
+        <div>
+            <span class="dock-text" id="ui-dock-title">Walk Inside</span>
+            <span class="dock-subtext" id="ui-dock-sub">Drag figure into a room</span>
+        </div>
+    </div>
+
+    <div id="drag-ghost">
+        <svg viewBox="0 0 24 24">
+            <path d="M12 2c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2zm5.5 7h-11c-.83 0-1.5.67-1.5 1.5S5.67 12 6.5 12H9v9.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V16h1v5.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V12h2.5c.83 0 1.5-.67 1.5-1.5S18.33 9 17.5 9z"/>
+        </svg>
+    </div>
+
+    <div id="fps-header">
+        <span id="ui-fps-hint"><b>WASD</b> Move &nbsp;·&nbsp; <b>Drag</b> Look</span>
+        <button id="exit-fps-btn" title="Exit (ESC)">✕</button>
+    </div>
+
+    <div id="joystick-zone"><div id="joystick-knob"></div></div>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>
