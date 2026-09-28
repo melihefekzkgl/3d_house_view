@@ -9,7 +9,7 @@ export const PROJE_AYARLARI = {
         tr: "52.2 m² (Net)"
     },
     modelYolu: "./ev.glb",
-    hdrYolu: "./assets/hdri/ortam.hdr",
+    hdrYolu: "./ortam.hdr",
     fpsBoyYuksekligi: 2.80,
     maxBoyYuksekligi: 4.50,
     orbitFov: 50,
